@@ -36,6 +36,15 @@ module.exports = {
           }
         },
       },
+      // AppImage works across most Linux distros (including Arch) without install
+      {
+        name: '@electron-forge/maker-appimage',
+        config: {
+          options: {
+             icon: './image.png'
+          }
+        }
+      }
     ] : []),
   ],
   plugins: [
