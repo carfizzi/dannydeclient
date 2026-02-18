@@ -131,13 +131,13 @@ app.whenReady().then(() => {
     }
 
     // Configure autoUpdater
-    const server = 'https://chat.dannydedisco.eu'
-    const feedURL = `${server}/releases/${process.platform}/${app.getVersion()}`
+    const server = 'https://dannydeclient-updates.vercel.app'
+    const feedURL = `${server}/update/${process.platform}/${app.getVersion()}`
     
     // Note: Squirrel (Windows) and Darwin handle updates differently. 
-    // This simple configuration assumes a specific server structure.
-    // Windows expects /releases/win32/1.0.0/RELEASES 
-    // macOS expects a JSON response or similar depending on server setup (e.g. Hazel/Nuts)
+    // Hazel server handles the differences automatically.
+    // Windows receives the RELEASES file.
+    // macOS receives the update JSON.
     
     if (app.isPackaged) {
         try {
