@@ -1,5 +1,13 @@
-const {app, BrowserWindow, desktopCapturer, Menu, globalShortcut, Tray, nativeImage} = require('electron')
+const {app, BrowserWindow, desktopCapturer, Menu, globalShortcut, Tray, nativeImage, autoUpdater, dialog} = require('electron')
 const path = require('path')
+
+// Implement single instance lock
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+    app.quit()
+    return
+}
 
 let mainWindow = null
 let tray = null
@@ -32,13 +40,12 @@ const createWindow = () => {
 
     // Handle screen share requests
     win.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
-        desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
+        desktopCapturer.getSources({types: ['screen', 'window']}).then((sources) => {
             const menu = Menu.buildFromTemplate(
                 sources.map((source) => ({
                     label: source.name,
                     click: () => {
-                        // Pass video source only. If audio is not provided, it defaults to no audio.
-                        callback({ video: source }) 
+                        callback({video: source, audio: 'loopback'})
                     },
                 }))
             )
@@ -61,9 +68,9 @@ const createWindow = () => {
 
         // Add local F4 listener as a fallback (especially for Linux/Wayland)
         if (input.key === 'F4' && input.type === 'keyDown') {
-             console.log('Local F4 pressed')
-             toggleMute()
-             event.preventDefault()
+            console.log('Local F4 pressed')
+            toggleMute()
+            event.preventDefault()
         }
     })
 
@@ -81,10 +88,40 @@ const createWindow = () => {
 app.whenReady().then(() => {
     mainWindow = createWindow()
 
+    if (app.isPackaged) {
+        const server = 'https://chat.dannydedisco.eu/releases'
+        const feedURL = `${server}/${process.platform}/${app.getVersion()}`
+        
+        try {
+            autoUpdater.setFeedURL({ url: feedURL })
+            
+            autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
+                const dialogOpts = {
+                    type: 'info',
+                    buttons: ['Restart', 'Later'],
+                    title: 'Application Update',
+                    message: process.platform === 'win32' ? releaseNotes : releaseName,
+                    detail: 'A new version has been downloaded. Restart the application to apply the updates.'
+                }
+            
+                dialog.showMessageBox(dialogOpts).then((returnValue) => {
+                    if (returnValue.response === 0) autoUpdater.quitAndInstall()
+                })
+            })
+            
+            autoUpdater.on('error', (message) => {
+                console.error('There was a problem updating the application')
+                console.error(message)
+            })
+        } catch (err) {
+            console.error('Failed to set up autoUpdater:', err)
+        }
+    }
+
     const iconName = process.platform === 'win32' ? 'image.ico' : 'image.png'
     const iconPath = path.join(__dirname, iconName)
     let icon = nativeImage.createFromPath(iconPath)
-    
+
     if (icon.isEmpty()) {
         console.log(`Icon file not found at ${iconPath}, using fallback icon`)
         // Create a simple 16x16 transparent icon with a dot (base64)
@@ -93,17 +130,81 @@ app.whenReady().then(() => {
         icon = nativeImage.createFromDataURL(fallbackIcon)
     }
 
+    // Configure autoUpdater
+    const server = 'https://chat.dannydedisco.eu'
+    const feedURL = `${server}/releases/${process.platform}/${app.getVersion()}`
+    
+    // Note: Squirrel (Windows) and Darwin handle updates differently. 
+    // This simple configuration assumes a specific server structure.
+    // Windows expects /releases/win32/1.0.0/RELEASES 
+    // macOS expects a JSON response or similar depending on server setup (e.g. Hazel/Nuts)
+    
+    if (app.isPackaged) {
+        try {
+            autoUpdater.setFeedURL({ url: feedURL })
+            
+            autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
+                const dialogOpts = {
+                    type: 'info',
+                    buttons: ['Restart', 'Later'],
+                    title: 'Application Update',
+                    message: process.platform === 'win32' ? releaseNotes : releaseName,
+                    detail: 'A new version has been downloaded. Restart the application to apply the updates.'
+                }
+            
+                dialog.showMessageBox(dialogOpts).then((returnValue) => {
+                    if (returnValue.response === 0) autoUpdater.quitAndInstall()
+                })
+            })
+            
+            autoUpdater.on('error', (message) => {
+                console.error('There was a problem updating the application')
+                console.error(message)
+            })
+            
+            // Check for updates periodically (optional, here we will trigger manually via tray)
+            // setInterval(() => {
+            //    autoUpdater.checkForUpdates()
+            // }, 60000)
+        } catch (err) {
+            console.error('Failed to set up autoUpdater:', err)
+        }
+    }
+
     tray = new Tray(icon)
     const contextMenu = Menu.buildFromTemplate([
-        { label: 'Show App', click: () => mainWindow.show() },
-        { label: 'Exit', click: () => {
-            isQuitting = true
-            app.quit()
-        }}
+        {label: 'Show App', click: () => mainWindow.show()},
+        {
+            label: 'Check for Updates', click: () => {
+                if (!app.isPackaged) {
+                    dialog.showMessageBox({
+                        type: 'info',
+                        title: 'Update Check',
+                        message: 'Cannot check for updates in development mode.',
+                        detail: 'Please package the application first.'
+                    })
+                    return
+                }
+                
+                autoUpdater.checkForUpdates()
+                dialog.showMessageBox({
+                    type: 'info',
+                    title: 'Update Check',
+                    message: 'Checking for updates...',
+                    detail: 'If an update is available, you will be notified.'
+                })
+            }
+        },
+        {
+            label: 'Exit', click: () => {
+                isQuitting = true
+                app.quit()
+            }
+        }
     ])
     tray.setToolTip('Danny DeClient')
     tray.setContextMenu(contextMenu)
-    
+
     tray.on('click', () => {
         mainWindow.show()
     })
@@ -112,17 +213,17 @@ app.whenReady().then(() => {
     // Note: On Linux, this might require specific permissions or fail if another app has grabbed the key.
     try {
         const ret = globalShortcut.register('F4', () => {
-            console.log('Global F4 pressed')
-            toggleMute()
+            console.log('Global F4 pressed');
+            toggleMute();
         })
 
         if (!ret) {
-            console.log('Global shortcut registration failed')
+            console.log('Global shortcut registration failed');
         } else {
-            console.log('Global shortcut registered successfully')
+            console.log('Global shortcut registered successfully');
         }
     } catch (error) {
-        console.error('Error registering global shortcut:', error)
+        console.error('Error registering global shortcut:', error);
     }
 
     app.on('activate', () => {
@@ -132,14 +233,24 @@ app.whenReady().then(() => {
             mainWindow.show()
         }
     })
+
+    // Handle second instance launch
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        // Someone tried to run a second instance, we should focus our window.
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore()
+            mainWindow.show()
+            mainWindow.focus()
+        }
+    })
 })
 
 app.on('before-quit', () => {
-    isQuitting = true
+    isQuitting = true;
 })
 
 app.on('will-quit', () => {
-    globalShortcut.unregisterAll()
+    globalShortcut.unregisterAll();
 })
 
 app.on('window-all-closed', () => {
