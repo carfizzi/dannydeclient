@@ -4,25 +4,39 @@ const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 module.exports = {
   packagerConfig: {
     asar: true,
+    icon: './image'
   },
   rebuildConfig: {},
   makers: [
-    {
+    // Only build installer on Windows or if Wine is installed (skipped for macOS without Wine)
+    ...(process.platform === 'win32' ? [{
       name: '@electron-forge/maker-squirrel',
-      config: {},
-    },
+      config: {
+        setupIcon: './image.ico'
+      },
+    }] : []),
     {
       name: '@electron-forge/maker-zip',
-      platforms: ['darwin'],
+      platforms: ['darwin', 'win32', 'linux'],
     },
-    {
-      name: '@electron-forge/maker-deb',
-      config: {},
-    },
-    {
-      name: '@electron-forge/maker-rpm',
-      config: {},
-    },
+    ...(process.platform === 'linux' ? [
+      {
+        name: '@electron-forge/maker-deb',
+        config: {
+          options: {
+            icon: './image.png'
+          }
+        },
+      },
+      {
+        name: '@electron-forge/maker-rpm',
+        config: {
+          options: {
+            icon: './image.png'
+          }
+        },
+      },
+    ] : []),
   ],
   plugins: [
     {
