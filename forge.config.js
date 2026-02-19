@@ -36,14 +36,6 @@ module.exports = {
                     }
                 },
             },
-            {
-                name: 'electron-forge-maker-appimage',
-                config: {
-                    options: {
-                        icon: './image.png'
-                    }
-                },
-            }
         ] : []),
     ],
     plugins: [
