@@ -58,6 +58,7 @@ jobs:
             out/make/**/*.exe
             out/make/**/*.dmg
             out/make/**/RELEASES
+            out/make/**/latest-linux.yml
             out/make/**/*.nupkg
             !out/make/**/*.pak
 

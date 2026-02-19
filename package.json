@@ -1,7 +1,11 @@
 {
   "name": "dannydeclient",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "simple electron wrapper for sharkord instance",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/carfizzi/dannydeclient"
+  },
   "license": "ISC",
   "author": "Marco",
   "type": "commonjs",
@@ -43,6 +47,8 @@
     "electron-builder": "^26.8.1"
   },
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.1"
+    "electron-log": "^5.4.3",
+    "electron-squirrel-startup": "^1.0.1",
+    "electron-updater": "^6.8.3"
   }
 }

@@ -1,5 +1,11 @@
 const {app, BrowserWindow, desktopCapturer, Menu, globalShortcut, Tray, nativeImage, autoUpdater, dialog} = require('electron')
+const { autoUpdater: electronUpdater } = require('electron-updater')
+const log = require('electron-log')
 const path = require('path')
+
+// Configure logging
+log.transports.file.level = 'info'
+electronUpdater.logger = log
 
 // Implement single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -98,40 +104,44 @@ app.whenReady().then(() => {
 
     if (app.isPackaged) {
         // Configure autoUpdater
-        const server = 'https://dannydeclient-updates.vercel.app'
-        const feedURL = `${server}/update/${process.platform}/${app.getVersion()}`
-        
-        // Note: Squirrel (Windows) and Darwin handle updates differently. 
-        // Hazel server handles the differences automatically.
-        // Windows receives the RELEASES file.
-        // macOS receives the update JSON.
-        
-        try {
-            autoUpdater.setFeedURL({ url: feedURL })
+        if (process.platform === 'linux') {
+             electronUpdater.checkForUpdatesAndNotify()
+        } else {
+            const server = 'https://dannydeclient-updates.vercel.app'
+            const feedURL = `${server}/update/${process.platform}/${app.getVersion()}`
             
-            autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
-                const dialogOpts = {
-                    type: 'info',
-                    buttons: ['Restart', 'Later'],
-                    title: 'Application Update',
-                    message: process.platform === 'win32' ? releaseNotes : releaseName,
-                    detail: 'A new version has been downloaded. Restart the application to apply the updates.'
-                }
+            // Note: Squirrel (Windows) and Darwin handle updates differently. 
+            // Hazel server handles the differences automatically.
+            // Windows receives the RELEASES file.
+            // macOS receives the update JSON.
             
-                dialog.showMessageBox(dialogOpts).then((returnValue) => {
-                    if (returnValue.response === 0) autoUpdater.quitAndInstall()
+            try {
+                autoUpdater.setFeedURL({ url: feedURL })
+                
+                autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
+                    const dialogOpts = {
+                        type: 'info',
+                        buttons: ['Restart', 'Later'],
+                        title: 'Application Update',
+                        message: process.platform === 'win32' ? releaseNotes : releaseName,
+                        detail: 'A new version has been downloaded. Restart the application to apply the updates.'
+                    }
+                
+                    dialog.showMessageBox(dialogOpts).then((returnValue) => {
+                        if (returnValue.response === 0) autoUpdater.quitAndInstall()
+                    })
                 })
-            })
-            
-            autoUpdater.on('error', (message) => {
-                console.error('There was a problem updating the application')
-                console.error(message)
-            })
-            
-            // Check for updates immediately on startup
-            autoUpdater.checkForUpdates()
-        } catch (err) {
-            console.error('Failed to set up autoUpdater:', err)
+                
+                autoUpdater.on('error', (message) => {
+                    console.error('There was a problem updating the application')
+                    console.error(message)
+                })
+                
+                // Check for updates immediately on startup
+                autoUpdater.checkForUpdates()
+            } catch (err) {
+                console.error('Failed to set up autoUpdater:', err)
+            }
         }
     }
 
@@ -162,7 +172,12 @@ app.whenReady().then(() => {
                     return
                 }
                 
-                autoUpdater.checkForUpdates()
+                if (process.platform === 'linux') {
+                    electronUpdater.checkForUpdatesAndNotify()
+                } else {
+                    autoUpdater.checkForUpdates()
+                }
+                
                 dialog.showMessageBox({
                     type: 'info',
                     title: 'Update Check',
