@@ -9,8 +9,6 @@ if (!gotTheLock) {
     return
 }
 
-app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
-
 let mainWindow = null
 let tray = null
 let isQuitting = false
@@ -74,9 +72,9 @@ const createWindow = () => {
             event.preventDefault()
         }
 
-        // Add local F4 listener as a fallback (especially for Linux/Wayland)
-        if (input.key === 'F4' && input.type === 'keyDown') {
-            console.log('Local F4 pressed')
+        // Add local - listener as a fallback (especially for Linux/Wayland)
+        if (input.key === '-' && input.type === 'keyDown') {
+            console.log('Local - pressed')
             toggleMute()
             event.preventDefault()
         }
@@ -96,9 +94,17 @@ const createWindow = () => {
 app.whenReady().then(() => {
     mainWindow = createWindow();
 
+    app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
+
     if (app.isPackaged) {
-        const server = 'https://chat.dannydedisco.eu/releases'
-        const feedURL = `${server}/${process.platform}/${app.getVersion()}`
+        // Configure autoUpdater
+        const server = 'https://dannydeclient-updates.vercel.app'
+        const feedURL = `${server}/update/${process.platform}/${app.getVersion()}`
+        
+        // Note: Squirrel (Windows) and Darwin handle updates differently. 
+        // Hazel server handles the differences automatically.
+        // Windows receives the RELEASES file.
+        // macOS receives the update JSON.
         
         try {
             autoUpdater.setFeedURL({ url: feedURL })
@@ -121,6 +127,9 @@ app.whenReady().then(() => {
                 console.error('There was a problem updating the application')
                 console.error(message)
             })
+            
+            // Check for updates immediately on startup
+            autoUpdater.checkForUpdates()
         } catch (err) {
             console.error('Failed to set up autoUpdater:', err)
         }
@@ -136,47 +145,6 @@ app.whenReady().then(() => {
         // This is a minimal valid PNG
         const fallbackIcon = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAACpJREFUOE9jZKAQMFKon2HUAIbRMAAmMpylp6f/TxFmYmKCm0ZSDIxmAAByEwUeW2u71AAAAABJRU5ErkJggg=='
         icon = nativeImage.createFromDataURL(fallbackIcon)
-    }
-
-    // Configure autoUpdater
-    const server = 'https://dannydeclient-updates.vercel.app'
-    const feedURL = `${server}/update/${process.platform}/${app.getVersion()}`
-    
-    // Note: Squirrel (Windows) and Darwin handle updates differently. 
-    // Hazel server handles the differences automatically.
-    // Windows receives the RELEASES file.
-    // macOS receives the update JSON.
-    
-    if (app.isPackaged) {
-        try {
-            autoUpdater.setFeedURL({ url: feedURL })
-            
-            autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
-                const dialogOpts = {
-                    type: 'info',
-                    buttons: ['Restart', 'Later'],
-                    title: 'Application Update',
-                    message: process.platform === 'win32' ? releaseNotes : releaseName,
-                    detail: 'A new version has been downloaded. Restart the application to apply the updates.'
-                }
-            
-                dialog.showMessageBox(dialogOpts).then((returnValue) => {
-                    if (returnValue.response === 0) autoUpdater.quitAndInstall()
-                })
-            })
-            
-            autoUpdater.on('error', (message) => {
-                console.error('There was a problem updating the application')
-                console.error(message)
-            })
-            
-            // Check for updates periodically (optional, here we will trigger manually via tray)
-            // setInterval(() => {
-            //    autoUpdater.checkForUpdates()
-            // }, 60000)
-        } catch (err) {
-            console.error('Failed to set up autoUpdater:', err)
-        }
     }
 
     tray = new Tray(icon)
@@ -217,11 +185,11 @@ app.whenReady().then(() => {
         mainWindow.show()
     })
 
-    // Register global shortcut for mute toggle (F4)
+    // Register global shortcut for mute toggle (-)
     // Note: On Linux, this might require specific permissions or fail if another app has grabbed the key.
     try {
-        const ret = globalShortcut.register('F4', () => {
-            console.log('Global F4 pressed');
+        const ret = globalShortcut.register('-', () => {
+            console.log('Global - pressed');
             toggleMute();
         })
 
