@@ -6,6 +6,12 @@
   "author": "Marco",
   "type": "commonjs",
   "main": "main.js",
+  "build": {
+    "appId": "com.dannydeclient.app",
+    "linux": {
+      "target": "AppImage"
+    }
+  },
   "scripts": {
     "start": "electron-forge start",
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -25,10 +31,10 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron/fuses": "^1.8.0",
-    "electron": "^40.4.1"
+    "electron": "^40.6.0",
+    "electron-forge-maker-appimage": "^26.8.1"
   },
   "dependencies": {
-    "electron-forge-maker-appimage": "^26.8.1",
     "electron-squirrel-startup": "^1.0.1"
   }
 }
