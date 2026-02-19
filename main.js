@@ -9,6 +9,8 @@ if (!gotTheLock) {
     return
 }
 
+app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
+
 let mainWindow = null
 let tray = null
 let isQuitting = false
@@ -92,7 +94,7 @@ const createWindow = () => {
 }
 
 app.whenReady().then(() => {
-    mainWindow = createWindow()
+    mainWindow = createWindow();
 
     if (app.isPackaged) {
         const server = 'https://chat.dannydedisco.eu/releases'
