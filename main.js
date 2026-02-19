@@ -33,7 +33,12 @@ const toggleMute = () => {
 const createWindow = () => {
     const win = new BrowserWindow({
         width: 1024,
-        height: 800
+        height: 800,
+        title: `Danny DeClient v${app.getVersion()}`
+    })
+
+    win.on('page-title-updated', (e) => {
+        e.preventDefault()
     })
 
     win.removeMenu()
@@ -53,6 +58,7 @@ const createWindow = () => {
         })
     })
 
+    win.setTitle(`Danny DeClient v${app.getVersion()}`)
     void win.loadURL('https://chat.dannydedisco.eu')
 
     // Enable DevTools via F12 or Ctrl+Shift+I
