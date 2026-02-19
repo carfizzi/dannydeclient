@@ -57,6 +57,8 @@ jobs:
             out/make/**/*.AppImage
             out/make/**/*.exe
             out/make/**/*.dmg
+            out/make/**/RELEASES
+            out/make/**/*.nupkg
             !out/make/**/*.pak
 
   release:
