@@ -73,10 +73,10 @@ const createWindow = () => {
         }
 
         // Add local - listener as a fallback (especially for Linux/Wayland)
-        if (input.key === '-' && input.type === 'keyDown') {
-            console.log('Local - pressed')
-            toggleMute()
-            event.preventDefault()
+        if (input.key === 'F4' && input.type === 'keyDown') {
+            console.log('Local F4 pressed')
+            toggleMute();
+            event.preventDefault();
         }
     })
 
@@ -188,8 +188,8 @@ app.whenReady().then(() => {
     // Register global shortcut for mute toggle (-)
     // Note: On Linux, this might require specific permissions or fail if another app has grabbed the key.
     try {
-        const ret = globalShortcut.register('-', () => {
-            console.log('Global - pressed');
+        const ret = globalShortcut.register('F4', () => {
+            console.log('Global F4 pressed');
             toggleMute();
         })
 
