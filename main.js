@@ -1,4 +1,4 @@
-const {app, BrowserWindow, desktopCapturer, Menu, globalShortcut, Tray, nativeImage, autoUpdater, dialog} = require('electron')
+const {app, BrowserWindow, desktopCapturer, Menu, globalShortcut, Tray, nativeImage, autoUpdater, dialog, systemPreferences} = require('electron')
 const { autoUpdater: electronUpdater } = require('electron-updater')
 const log = require('electron-log')
 const path = require('path')
@@ -52,15 +52,21 @@ const createWindow = () => {
     // Handle screen share requests
     win.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
         desktopCapturer.getSources({types: ['screen', 'window']}).then((sources) => {
+            console.log('Got sources for screen sharing:', sources.map(s => s.name))
             const menu = Menu.buildFromTemplate(
                 sources.map((source) => ({
                     label: source.name,
                     click: () => {
-                        callback({video: source, audio: 'loopback'})
+                        console.log('Selected source:', source.id, source.name)
+                        // The callback expects video to be a DesktopCapturerSource
+                        // Removing audio: 'loopback' as it might be causing the track to end immediately on macOS if not supported
+                        callback({video: source})
                     },
                 }))
             )
             menu.popup()
+        }).catch((err) => {
+            console.error('Error getting sources:', err)
         })
     })
 
@@ -93,6 +99,20 @@ const createWindow = () => {
             return false
         }
     })
+
+    // Check permissions on macOS
+    if (process.platform === 'darwin') {
+        const micStatus = systemPreferences.getMediaAccessStatus('microphone')
+        console.log('Microphone access status:', micStatus)
+        if (micStatus === 'not-determined') {
+            systemPreferences.askForMediaAccess('microphone').then((access) => {
+                console.log('Microphone access:', access ? 'granted' : 'denied')
+            })
+        }
+        
+        const screenStatus = systemPreferences.getMediaAccessStatus('screen')
+        console.log('Screen recording access status:', screenStatus)
+    }
 
     return win
 }

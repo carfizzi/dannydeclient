@@ -1,6 +1,6 @@
 {
   "name": "dannydeclient",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "simple electron wrapper for sharkord instance",
   "repository": {
     "type": "git",

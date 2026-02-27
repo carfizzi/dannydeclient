@@ -8,7 +8,11 @@ module.exports = {
         ignore: [
              /locales/,
              /.*\.pak/
-        ]
+        ],
+        extendInfo: {
+            NSMicrophoneUsageDescription: "This app needs access to the microphone for audio calls.",
+            NSCameraUsageDescription: "This app needs access to the camera for video calls.",
+        }
     },
     rebuildConfig: {},
     makers: [
