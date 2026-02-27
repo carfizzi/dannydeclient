@@ -1,4 +1,4 @@
-const {app, BrowserWindow, desktopCapturer, Menu, globalShortcut, Tray, nativeImage, autoUpdater, dialog, systemPreferences} = require('electron')
+const {app, BrowserWindow, desktopCapturer, Menu, globalShortcut, Tray, nativeImage, autoUpdater, dialog, systemPreferences, shell} = require('electron')
 const { autoUpdater: electronUpdater } = require('electron-updater')
 const log = require('electron-log')
 const path = require('path')
@@ -70,6 +70,29 @@ const createWindow = () => {
         })
     })
 
+    // Handle permission requests
+    win.webContents.session.setPermissionRequestHandler((webContents, permission, callback, details) => {
+        console.log('Permission requested:', permission, details)
+        const allowedPermissions = ['media', 'display-capture', 'mediaKeySystem', 'clipboard-read', 'clipboard-write']
+        if (allowedPermissions.includes(permission)) {
+            callback(true)
+        } else {
+            console.log('Permission denied by handler:', permission)
+            callback(false)
+        }
+    })
+
+    // Handle permission checks (synchronous)
+    win.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+        const allowedPermissions = ['media', 'display-capture', 'mediaKeySystem', 'clipboard-read', 'clipboard-write']
+        if (allowedPermissions.includes(permission)) {
+            return true
+        }
+        console.log('Permission check denied:', permission)
+        return false
+    })
+
+
     win.setTitle(`Danny DeClient v${app.getVersion()}`)
     void win.loadURL('https://chat.dannydedisco.eu')
 
@@ -102,17 +125,82 @@ const createWindow = () => {
 
     // Check permissions on macOS
     if (process.platform === 'darwin') {
-        const micStatus = systemPreferences.getMediaAccessStatus('microphone')
-        console.log('Microphone access status:', micStatus)
-        if (micStatus === 'not-determined') {
-            systemPreferences.askForMediaAccess('microphone').then((access) => {
-                console.log('Microphone access:', access ? 'granted' : 'denied')
-            })
+        const checkMic = async () => {
+            const micStatus = systemPreferences.getMediaAccessStatus('microphone')
+            console.log('Microphone access status:', micStatus)
+            if (micStatus === 'not-determined' || micStatus === 'unknown') {
+                const access = await systemPreferences.askForMediaAccess('microphone')
+                console.log('Microphone access requested:', access ? 'granted' : 'denied')
+            } else if (micStatus === 'denied') {
+                console.log('Microphone access denied. Please enable it in System Settings.')
+            }
         }
+        
+        checkMic()
         
         const screenStatus = systemPreferences.getMediaAccessStatus('screen')
         console.log('Screen recording access status:', screenStatus)
     }
+
+    // Add debug menu
+    const menuTemplate = [
+        ...(process.platform === 'darwin' ? [{
+            label: app.name,
+            submenu: [
+                { role: 'about' },
+                { type: 'separator' },
+                { role: 'services' },
+                { type: 'separator' },
+                { role: 'hide' },
+                { role: 'hideOthers' },
+                { role: 'unhide' },
+                { type: 'separator' },
+                { role: 'quit' }
+            ]
+        }] : []),
+        {
+            label: 'Debug',
+            submenu: [
+                {
+                    label: 'Check Microphone Permission',
+                    click: async () => {
+                         const status = systemPreferences.getMediaAccessStatus('microphone')
+                         console.log('Manual check - Mic status:', status)
+                         // Try to trigger prompt if not already denied
+                         let access = false
+                         try {
+                             access = await systemPreferences.askForMediaAccess('microphone')
+                         } catch (e) {
+                             console.error('Error asking for mic access:', e)
+                         }
+                         
+                         console.log('Manual request - Mic access:', access)
+                         
+                         if (!access) {
+                             const {response} = await dialog.showMessageBox({
+                                 type: 'warning',
+                                 title: 'Microphone Access Denied',
+                                 message: 'Microphone access is denied or not granted.',
+                                 detail: `Current status: ${status}\n\nPlease enable Microphone access in System Settings > Privacy & Security.`,
+                                 buttons: ['Open Settings', 'Cancel'],
+                                 defaultId: 0
+                             })
+                             
+                             if (response === 0) {
+                                 systemPreferences.openSystemPreferences('security', 'Microphone')
+                             }
+                         }
+                    }
+                },
+                {
+                    label: 'Open DevTools',
+                    click: () => win.webContents.openDevTools()
+                }
+            ]
+        }
+    ]
+    const menu = Menu.buildFromTemplate(menuTemplate)
+    Menu.setApplicationMenu(menu)
 
     return win
 }
