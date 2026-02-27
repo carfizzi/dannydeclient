@@ -9,6 +9,13 @@ module.exports = {
              /locales/,
              /.*\.pak/
         ],
+        osxSign: {},
+        // osxSign: {
+        //     'hardened-runtime': true,
+        //     entitlements: './entitlements.plist',
+        //     'entitlements-inherit': './entitlements.plist',
+        //     'signature-flags': 'library'
+        // },
         extendInfo: {
             NSMicrophoneUsageDescription: "This app needs access to the microphone for audio calls.",
             NSCameraUsageDescription: "This app needs access to the camera for video calls.",
@@ -53,14 +60,16 @@ module.exports = {
         },
         // Fuses are used to enable/disable various Electron functionality
         // at package time, before code signing the application
+        /*
         new FusesPlugin({
             version: FuseVersion.V1,
-            [FuseV1Options.RunAsNode]: false,
+            [FuseV1Options.RunAsNode]: true,
             [FuseV1Options.EnableCookieEncryption]: true,
-            [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
-            [FuseV1Options.EnableNodeCliInspectArguments]: false,
-            [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-            [FuseV1Options.OnlyLoadAppFromAsar]: true,
+            [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: true,
+            [FuseV1Options.EnableNodeCliInspectArguments]: true,
+            [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: false,
+            [FuseV1Options.OnlyLoadAppFromAsar]: false,
         }),
+        */
     ],
 };

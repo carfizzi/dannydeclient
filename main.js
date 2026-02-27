@@ -125,18 +125,27 @@ const createWindow = () => {
 
     // Check permissions on macOS
     if (process.platform === 'darwin') {
-        const checkMic = async () => {
-            const micStatus = systemPreferences.getMediaAccessStatus('microphone')
-            console.log('Microphone access status:', micStatus)
-            if (micStatus === 'not-determined' || micStatus === 'unknown') {
-                const access = await systemPreferences.askForMediaAccess('microphone')
-                console.log('Microphone access requested:', access ? 'granted' : 'denied')
-            } else if (micStatus === 'denied') {
-                console.log('Microphone access denied. Please enable it in System Settings.')
+        const checkMediaAccess = async () => {
+            try {
+                const micStatus = systemPreferences.getMediaAccessStatus('microphone')
+                console.log('Microphone access status:', micStatus)
+                if (micStatus === 'not-determined' || micStatus === 'unknown') {
+                    const access = await systemPreferences.askForMediaAccess('microphone')
+                    console.log('Microphone access requested:', access ? 'granted' : 'denied')
+                }
+                
+                const cameraStatus = systemPreferences.getMediaAccessStatus('camera')
+                console.log('Camera access status:', cameraStatus)
+                if (cameraStatus === 'not-determined' || cameraStatus === 'unknown') {
+                    const access = await systemPreferences.askForMediaAccess('camera')
+                    console.log('Camera access requested:', access ? 'granted' : 'denied')
+                }
+            } catch (err) {
+                console.error('Failed to check media access:', err)
             }
         }
         
-        checkMic()
+        checkMediaAccess()
         
         const screenStatus = systemPreferences.getMediaAccessStatus('screen')
         console.log('Screen recording access status:', screenStatus)
