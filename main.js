@@ -96,15 +96,17 @@ const createWindow = () => {
     win.setTitle(`Danny DeClient v${app.getVersion()}`)
     void win.loadURL('https://chat.dannydedisco.eu')
 
-    // Enable DevTools via F12 or Ctrl+Shift+I
+    // Enable DevTools via F12 or Ctrl+Shift+I (Development only)
     win.webContents.on('before-input-event', (event, input) => {
-        if (input.key === 'F12' && input.type === 'keyDown') {
-            win.webContents.toggleDevTools()
-            event.preventDefault()
-        }
-        if (input.control && input.shift && input.key.toLowerCase() === 'i' && input.type === 'keyDown') {
-            win.webContents.toggleDevTools()
-            event.preventDefault()
+        if (!app.isPackaged) {
+            if (input.key === 'F12' && input.type === 'keyDown') {
+                win.webContents.toggleDevTools()
+                event.preventDefault()
+            }
+            if (input.control && input.shift && input.key.toLowerCase() === 'i' && input.type === 'keyDown') {
+                win.webContents.toggleDevTools()
+                event.preventDefault()
+            }
         }
 
         // Add local - listener as a fallback (especially for Linux/Wayland)
@@ -166,47 +168,7 @@ const createWindow = () => {
                 { type: 'separator' },
                 { role: 'quit' }
             ]
-        }] : []),
-        {
-            label: 'Debug',
-            submenu: [
-                {
-                    label: 'Check Microphone Permission',
-                    click: async () => {
-                         const status = systemPreferences.getMediaAccessStatus('microphone')
-                         console.log('Manual check - Mic status:', status)
-                         // Try to trigger prompt if not already denied
-                         let access = false
-                         try {
-                             access = await systemPreferences.askForMediaAccess('microphone')
-                         } catch (e) {
-                             console.error('Error asking for mic access:', e)
-                         }
-                         
-                         console.log('Manual request - Mic access:', access)
-                         
-                         if (!access) {
-                             const {response} = await dialog.showMessageBox({
-                                 type: 'warning',
-                                 title: 'Microphone Access Denied',
-                                 message: 'Microphone access is denied or not granted.',
-                                 detail: `Current status: ${status}\n\nPlease enable Microphone access in System Settings > Privacy & Security.`,
-                                 buttons: ['Open Settings', 'Cancel'],
-                                 defaultId: 0
-                             })
-                             
-                             if (response === 0) {
-                                 systemPreferences.openSystemPreferences('security', 'Microphone')
-                             }
-                         }
-                    }
-                },
-                {
-                    label: 'Open DevTools',
-                    click: () => win.webContents.openDevTools()
-                }
-            ]
-        }
+        }] : [])
     ]
     const menu = Menu.buildFromTemplate(menuTemplate)
     Menu.setApplicationMenu(menu)
