@@ -159,6 +159,29 @@ const createWindow = () => {
             label: app.name,
             submenu: [
                 { role: 'about' },
+                {
+                    label: 'Check for Updates...',
+                    click: () => {
+                        if (!app.isPackaged) {
+                            dialog.showMessageBox({
+                                type: 'info',
+                                title: 'Update Check',
+                                message: 'Cannot check for updates in development mode.',
+                                detail: 'Please package the application first.'
+                            })
+                            return
+                        }
+                        
+                        autoUpdater.checkForUpdates()
+                        
+                        dialog.showMessageBox({
+                            type: 'info',
+                            title: 'Update Check',
+                            message: 'Checking for updates...',
+                            detail: 'If an update is available, you will be notified.'
+                        })
+                    }
+                },
                 { type: 'separator' },
                 { role: 'services' },
                 { type: 'separator' },
