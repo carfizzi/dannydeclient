@@ -73,7 +73,7 @@ const createWindow = () => {
     // Handle permission requests
     win.webContents.session.setPermissionRequestHandler((webContents, permission, callback, details) => {
         console.log('Permission requested:', permission, details)
-        const allowedPermissions = ['media', 'display-capture', 'mediaKeySystem', 'clipboard-read', 'clipboard-write', 'notifications']
+        const allowedPermissions = ['media', 'display-capture', 'mediaKeySystem', 'clipboard-read', 'clipboard-write', 'notifications', 'speaker-selection']
         if (allowedPermissions.includes(permission)) {
             callback(true)
         } else {
@@ -84,7 +84,7 @@ const createWindow = () => {
 
     // Handle permission checks (synchronous)
     win.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-        const allowedPermissions = ['media', 'display-capture', 'mediaKeySystem', 'clipboard-read', 'clipboard-write', 'notifications']
+        const allowedPermissions = ['media', 'display-capture', 'mediaKeySystem', 'clipboard-read', 'clipboard-write', 'notifications', 'speaker-selection']
         if (allowedPermissions.includes(permission)) {
             return true
         }
@@ -201,10 +201,12 @@ const createWindow = () => {
 
 app.setAppUserModelId('com.carfizzy.danny-de-client');
 
+// Enable GlobalShortcutsPortal for Linux Wayland support.
+// Must be called before app is ready.
+app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
+
 app.whenReady().then(() => {
     mainWindow = createWindow();
-
-    app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
 
     if (app.isPackaged) {
         // Configure autoUpdater
