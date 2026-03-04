@@ -201,9 +201,9 @@ const createWindow = () => {
 
 app.setAppUserModelId('com.carfizzy.danny-de-client');
 
-// Enable GlobalShortcutsPortal for Linux Wayland support.
-// Must be called before app is ready.
-app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
+// Explicitly disable GlobalShortcutsPortal to force X11/XWayland path on Linux
+// This avoids the "Failed to parse Activated signal" error from the portal backend
+app.commandLine.appendSwitch('disable-features', 'GlobalShortcutsPortal');
 
 app.whenReady().then(() => {
     mainWindow = createWindow();
