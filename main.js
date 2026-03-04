@@ -73,7 +73,7 @@ const createWindow = () => {
     // Handle permission requests
     win.webContents.session.setPermissionRequestHandler((webContents, permission, callback, details) => {
         console.log('Permission requested:', permission, details)
-        const allowedPermissions = ['media', 'display-capture', 'mediaKeySystem', 'clipboard-read', 'clipboard-write']
+        const allowedPermissions = ['media', 'display-capture', 'mediaKeySystem', 'clipboard-read', 'clipboard-write', 'notifications']
         if (allowedPermissions.includes(permission)) {
             callback(true)
         } else {
@@ -84,7 +84,7 @@ const createWindow = () => {
 
     // Handle permission checks (synchronous)
     win.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-        const allowedPermissions = ['media', 'display-capture', 'mediaKeySystem', 'clipboard-read', 'clipboard-write']
+        const allowedPermissions = ['media', 'display-capture', 'mediaKeySystem', 'clipboard-read', 'clipboard-write', 'notifications']
         if (allowedPermissions.includes(permission)) {
             return true
         }
@@ -198,6 +198,8 @@ const createWindow = () => {
 
     return win
 }
+
+app.setAppUserModelId('com.carfizzy.danny-de-client');
 
 app.whenReady().then(() => {
     mainWindow = createWindow();
