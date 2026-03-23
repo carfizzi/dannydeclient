@@ -1,6 +1,6 @@
 {
   "name": "dannydeclient",
-  "version": "1.0.13-a",
+  "version": "1.1.0-beta.5",
   "description": "simple electron wrapper for sharkord instance",
   "repository": {
     "type": "git",
@@ -9,7 +9,7 @@
   "license": "ISC",
   "author": "Marco",
   "type": "commonjs",
-  "main": "main.js",
+  "main": "dist/main.js",
   "build": {
     "appId": "com.dannydeclient.app",
     "directories": {
@@ -24,15 +24,17 @@
     ]
   },
   "scripts": {
-    "start": "electron-forge start",
+    "compile": "tsgo",
+    "start": "tsgo && electron-forge start",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
-    "make-win": "electron-forge make --platform win32 --arch x64",
-    "make-linux": "electron-forge make --platform linux --arch x64 && npm run build-linux",
+    "package": "tsgo && electron-forge package",
+    "make": "tsgo && electron-forge make",
+    "make-win": "tsgo && electron-forge make --platform win32 --arch x64",
+    "make-linux": "tsgo && electron-forge make --platform linux --arch x64 && npm run build-linux",
     "build-linux": "electron-builder build --linux appimage --x64 --publish never",
-    "make-darwin": "electron-forge make --platform darwin --arch arm64",
-    "make-all": "npm run make-win && npm run make-linux && npm run make-darwin"
+    "make-darwin": "tsgo && electron-forge make --platform darwin --arch arm64",
+    "make-all": "npm run make-win && npm run make-linux && npm run make-darwin",
+    "rebuild-native": "electron-rebuild -f -o wasapi_loopback"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
@@ -43,12 +45,17 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
     "@electron-forge/plugin-fuses": "^7.11.1",
     "@electron/fuses": "^1.8.0",
-    "electron": "^40.6.0",
-    "electron-builder": "^26.8.1"
+    "@types/node": "^25.5.0",
+    "@typescript/native-preview": "^7.0.0-dev.20260319.1",
+    "electron": "^40.8.3",
+    "@electron/rebuild": "^3.7.1",
+    "electron-builder": "^26.8.1",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "electron-log": "^5.4.3",
     "electron-squirrel-startup": "^1.0.1",
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.3",
+    "node-addon-api": "^8.0.0"
   }
 }

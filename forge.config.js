@@ -4,6 +4,7 @@ const {FuseV1Options, FuseVersion} = require('@electron/fuses');
 module.exports = {
     packagerConfig: {
         asar: true,
+        asarUnpack: ['**/*.node'],
         icon: './image',
         ignore: [
              /locales/,
@@ -19,6 +20,7 @@ module.exports = {
         extendInfo: {
             NSMicrophoneUsageDescription: "This app needs access to the microphone for audio calls.",
             NSCameraUsageDescription: "This app needs access to the camera for video calls.",
+            "NSScreenCaptureUsageDescription": "This app needs screen recording access to share your screen and capture system audio.",
         }
     },
     rebuildConfig: {},

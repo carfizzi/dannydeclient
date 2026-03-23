@@ -41,6 +41,7 @@ bower_components
 
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
+native/build/
 
 # Dependency directories
 node_modules/
@@ -51,6 +52,9 @@ web_modules/
 
 # TypeScript cache
 *.tsbuildinfo
+
+# TypeScript compiled output
+dist/
 
 # Optional npm cache directory
 .npm
