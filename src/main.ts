@@ -3,32 +3,21 @@ import {
   BrowserWindow,
   desktopCapturer,
   Menu,
+  MenuItem,
   globalShortcut,
   Tray,
   nativeImage,
   autoUpdater,
   dialog,
   systemPreferences,
-  ipcMain,
   MenuItemConstructorOptions,
   Event,
   Input,
 } from 'electron';
-import { autoUpdater as electronUpdater } from 'electron-updater';
+import {autoUpdater as electronUpdater} from 'electron-updater';
 import log from 'electron-log';
 import path from 'path';
-
-// Conditionally load WASAPI loopback native addon (Windows only)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let wasapiLoopback: any = null;
-if (process.platform === 'win32') {
-  try {
-    wasapiLoopback = require(path.join(__dirname, '..', 'native', 'build', 'Release', 'wasapi_loopback.node'));
-    console.log('[DannyDeClient] WASAPI loopback addon loaded');
-  } catch (e) {
-    console.error('[DannyDeClient] Failed to load WASAPI loopback addon:', e);
-  }
-}
+import fs from 'fs';
 
 // Configure logging
 log.transports.file.level = 'info';
@@ -45,6 +34,7 @@ if (!gotTheLock) {
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let noiseCancellationEnabled = false;
 
 const toggleMute = (): void => {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -72,13 +62,11 @@ const createWindow = (): BrowserWindow => {
     width: 1024,
     height: 800,
     title: `Danny DeClient v${app.getVersion()}`,
-    ...(process.platform === 'win32' && wasapiLoopback
-      ? {
-          webPreferences: {
-            preload: path.join(__dirname, 'preload.js'),
-          },
-        }
-      : {}),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: false,
+      sandbox: false,
+    },
   });
 
   win.on('page-title-updated', (e: Event) => {
@@ -93,7 +81,7 @@ const createWindow = (): BrowserWindow => {
     win.webContents.session.setDisplayMediaRequestHandler(
       (request, callback) => {
         desktopCapturer
-          .getSources({ types: ['screen', 'window'] })
+          .getSources({types: ['screen', 'window']})
           .then((sources) => {
             console.log(
               'Got sources for screen sharing:',
@@ -106,17 +94,17 @@ const createWindow = (): BrowserWindow => {
                 label: `${source.name} (without audio)`,
                 click: () => {
                   console.log('Selected source (video only):', source.name);
-                  callback({ video: source });
+                  callback({video: source});
                 },
               });
               menuItems.push({
                 label: `${source.name} (with audio)`,
                 click: () => {
                   console.log('Selected source (with audio):', source.name);
-                  callback({ video: source, audio: 'loopback' });
+                  callback({video: source, audio: 'loopback'});
                 },
               });
-              menuItems.push({ type: 'separator' });
+              menuItems.push({type: 'separator'});
             }
 
             const menu = Menu.buildFromTemplate(menuItems);
@@ -135,16 +123,14 @@ const createWindow = (): BrowserWindow => {
         // Don't call callback — let the system picker handle it
         console.log('System picker requested');
       },
-      { useSystemPicker: true }
+      {useSystemPicker: true}
     );
   } else if (process.platform === 'win32') {
-    // Windows: custom picker with video only. System audio is captured separately
-    // via the WASAPI native addon which excludes the app's own audio output,
-    // preventing echo. The audio track is injected in the renderer via AudioWorklet.
+    // Windows: custom picker with system audio loopback via Electron's built-in support
     win.webContents.session.setDisplayMediaRequestHandler(
       (request, callback) => {
         desktopCapturer
-          .getSources({ types: ['screen', 'window'] })
+          .getSources({types: ['screen', 'window']})
           .then((sources) => {
             console.log(
               '[DannyDeClient] Windows sources:',
@@ -156,24 +142,18 @@ const createWindow = (): BrowserWindow => {
               menuItems.push({
                 label: `${source.name} (with audio)`,
                 click: () => {
-                  console.log('[DannyDeClient] Selected (with WASAPI audio):', source.name);
-                  // Start WASAPI capture excluding our own process tree
-                  if (wasapiLoopback) {
-                    const ok = wasapiLoopback.startCapture(process.pid, 48000, 2);
-                    console.log('[DannyDeClient] WASAPI capture started:', ok);
-                  }
-                  // Only provide video — audio comes from WASAPI via AudioWorklet
-                  callback({ video: source });
+                  console.log('[DannyDeClient] Selected (with audio):', source.name);
+                  callback({video: source, audio: 'loopback'});
                 },
               });
               menuItems.push({
                 label: `${source.name} (without audio)`,
                 click: () => {
                   console.log('[DannyDeClient] Selected (no audio):', source.name);
-                  callback({ video: source });
+                  callback({video: source});
                 },
               });
-              menuItems.push({ type: 'separator' });
+              menuItems.push({type: 'separator'});
             }
 
             const menu = Menu.buildFromTemplate(menuItems);
@@ -213,124 +193,6 @@ const createWindow = (): BrowserWindow => {
         )
         .catch((err: unknown) =>
           console.error('Failed to inject restrictOwnAudio wrapper:', err)
-        );
-    });
-  } else if (process.platform === 'win32' && wasapiLoopback) {
-    // Windows: intercept getDisplayMedia to replace the audio track with one
-    // sourced from the WASAPI native addon (which excludes the app's own audio).
-    // The video track comes from desktopCapturer, and we add an AudioWorklet-based
-    // audio track fed by WASAPI PCM data via IPC.
-    win.webContents.on('did-finish-load', () => {
-      win.webContents
-        .executeJavaScript(
-          `
-          (function() {
-            const orig = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
-            navigator.mediaDevices.getDisplayMedia = async function(constraints) {
-              const stream = await orig(constraints);
-
-              // Only inject WASAPI audio if dannyAudio bridge is available
-              if (!window.dannyAudio) {
-                console.log('[DannyDeClient] dannyAudio bridge not available, returning stream as-is');
-                return stream;
-              }
-
-              try {
-                const audioCtx = new AudioContext({ sampleRate: 48000 });
-
-                // Create AudioWorklet from inline code via Blob URL
-                const workletCode = \`
-                  class WasapiAudioProcessor extends AudioWorkletProcessor {
-                    constructor() {
-                      super();
-                      this._buffer = new Float32Array(0);
-                      this.port.onmessage = (e) => {
-                        const newBuf = new Float32Array(this._buffer.length + e.data.length);
-                        newBuf.set(this._buffer);
-                        newBuf.set(e.data, this._buffer.length);
-                        this._buffer = newBuf;
-                      };
-                    }
-                    process(inputs, outputs) {
-                      const output = outputs[0];
-                      const channels = output.length;
-                      const frames = output[0].length;
-                      const needed = frames * channels;
-                      if (this._buffer.length >= needed) {
-                        for (let ch = 0; ch < channels; ch++) {
-                          for (let i = 0; i < frames; i++) {
-                            output[ch][i] = this._buffer[i * channels + ch];
-                          }
-                        }
-                        this._buffer = this._buffer.slice(needed);
-                      } else {
-                        // Not enough data — output silence
-                        for (let ch = 0; ch < channels; ch++) {
-                          output[ch].fill(0);
-                        }
-                      }
-                      return true;
-                    }
-                  }
-                  registerProcessor('wasapi-audio-processor', WasapiAudioProcessor);
-                \`;
-
-                const blob = new Blob([workletCode], { type: 'application/javascript' });
-                const workletUrl = URL.createObjectURL(blob);
-                await audioCtx.audioWorklet.addModule(workletUrl);
-                URL.revokeObjectURL(workletUrl);
-
-                const workletNode = new AudioWorkletNode(audioCtx, 'wasapi-audio-processor', {
-                  outputChannelCount: [2],
-                });
-                const dest = audioCtx.createMediaStreamDestination();
-                workletNode.connect(dest);
-
-                // Remove any existing audio tracks from the stream
-                stream.getAudioTracks().forEach(t => {
-                  stream.removeTrack(t);
-                  t.stop();
-                });
-
-                // Add the WASAPI-sourced audio track
-                dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
-
-                // Poll WASAPI addon for audio data and feed to worklet
-                const pollInterval = setInterval(async () => {
-                  try {
-                    const data = await window.dannyAudio.readAudio();
-                    if (data && data.length > 0) {
-                      workletNode.port.postMessage(data);
-                    }
-                  } catch (e) {
-                    // Capture may have stopped
-                  }
-                }, 20);
-
-                // Stop polling and cleanup when video track ends (share stopped)
-                const videoTrack = stream.getVideoTracks()[0];
-                if (videoTrack) {
-                  videoTrack.addEventListener('ended', () => {
-                    clearInterval(pollInterval);
-                    window.dannyAudio.stopCapture();
-                    audioCtx.close();
-                    console.log('[DannyDeClient] WASAPI audio capture stopped');
-                  });
-                }
-
-                console.log('[DannyDeClient] WASAPI audio track injected into stream');
-              } catch (err) {
-                console.error('[DannyDeClient] Failed to set up WASAPI audio:', err);
-              }
-
-              return stream;
-            };
-            console.log('[DannyDeClient] Windows getDisplayMedia wrapper installed');
-          })();
-          `
-        )
-        .catch((err: unknown) =>
-          console.error('Failed to inject Windows getDisplayMedia wrapper:', err)
         );
     });
   }
@@ -382,11 +244,11 @@ const createWindow = (): BrowserWindow => {
 
   // Enable DevTools via F12 or Ctrl+Shift+I (Development only)
   win.webContents.on('before-input-event', (event: Event, input: Input) => {
-    // if (!app.isPackaged) {
+    if (!app.isPackaged) {
       if (input.key === 'F12' && input.type === 'keyDown') {
         win.webContents.toggleDevTools();
         event.preventDefault();
-      // }
+      }
       if (
         input.control &&
         input.shift &&
@@ -450,55 +312,6 @@ const createWindow = (): BrowserWindow => {
     console.log('Screen recording access status:', screenStatus);
   }
 
-  // Add debug menu
-  const menuTemplate: MenuItemConstructorOptions[] = [
-    ...(process.platform === 'darwin'
-      ? [
-          {
-            label: app.name,
-            submenu: [
-              { role: 'about' as const },
-              {
-                label: 'Check for Updates...',
-                click: () => {
-                  if (!app.isPackaged) {
-                    void dialog.showMessageBox({
-                      type: 'info',
-                      title: 'Update Check',
-                      message:
-                        'Cannot check for updates in development mode.',
-                      detail: 'Please package the application first.',
-                    });
-                    return;
-                  }
-
-                  autoUpdater.checkForUpdates();
-
-                  void dialog.showMessageBox({
-                    type: 'info',
-                    title: 'Update Check',
-                    message: 'Checking for updates...',
-                    detail:
-                      'If an update is available, you will be notified.',
-                  });
-                },
-              },
-              { type: 'separator' as const },
-              { role: 'services' as const },
-              { type: 'separator' as const },
-              { role: 'hide' as const },
-              { role: 'hideOthers' as const },
-              { role: 'unhide' as const },
-              { type: 'separator' as const },
-              { role: 'quit' as const },
-            ],
-          },
-        ]
-      : []),
-  ];
-  const menu = Menu.buildFromTemplate(menuTemplate);
-  Menu.setApplicationMenu(menu);
-
   return win;
 };
 
@@ -507,7 +320,7 @@ app.setAppUserModelId('com.carfizzy.danny-de-client');
 // Explicitly disable GlobalShortcutsPortal to force X11/XWayland path on Linux
 app.commandLine.appendSwitch('disable-features', 'GlobalShortcutsPortal');
 
-// Enable system audio loopback for screen sharing on macOS and Linux
+// Enable system audio loopback for screen sharing
 if (process.platform === 'darwin') {
   app.commandLine.appendSwitch(
     'enable-features',
@@ -518,21 +331,44 @@ if (process.platform === 'darwin') {
     'enable-features',
     'PulseaudioLoopbackForScreenShare'
   );
+} else if (process.platform === 'win32') {
+  app.commandLine.appendSwitch(
+    'enable-features',
+    'WASAPIAudioLoopbackForScreenShare'
+  );
 }
 
-// IPC handlers for WASAPI audio streaming (Windows only)
-if (process.platform === 'win32' && wasapiLoopback) {
-  ipcMain.handle('wasapi-read-audio', () => {
-    return wasapiLoopback.readAudio();
-  });
-
-  ipcMain.handle('wasapi-stop', () => {
-    wasapiLoopback.stopCapture();
-  });
-}
 
 app.whenReady().then(() => {
+  // Load persisted settings
+  const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+
+  const loadSettings = (): { noiseCancellationEnabled: boolean } => {
+    try {
+      return JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as {
+        noiseCancellationEnabled: boolean;
+      };
+    } catch {
+      return {noiseCancellationEnabled: false};
+    }
+  };
+
+  const saveSettings = (): void => {
+    try {
+      fs.writeFileSync(settingsPath, JSON.stringify({noiseCancellationEnabled}));
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+    }
+  };
+
+  noiseCancellationEnabled = loadSettings().noiseCancellationEnabled;
+
   mainWindow = createWindow();
+
+  // Send persisted NC state to the renderer once the page has loaded
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.webContents.send('nc-toggle', noiseCancellationEnabled);
+  });
 
   if (app.isPackaged) {
     // Configure autoUpdater
@@ -543,7 +379,7 @@ app.whenReady().then(() => {
       const feedURL = `${server}/update/${process.platform}/${app.getVersion()}`;
 
       try {
-        autoUpdater.setFeedURL({ url: feedURL });
+        autoUpdater.setFeedURL({url: feedURL});
 
         autoUpdater.on(
           'update-downloaded',
@@ -589,45 +425,123 @@ app.whenReady().then(() => {
   }
 
   tray = new Tray(icon);
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show App', click: () => mainWindow?.show() },
-    {
-      label: 'Check for Updates',
-      click: () => {
-        if (!app.isPackaged) {
+
+  const buildAppMenu = (): Menu =>
+    Menu.buildFromTemplate([
+      ...(process.platform === 'darwin'
+        ? [
+          {
+            label: app.name,
+            submenu: [
+              {role: 'about' as const},
+              {
+                label: 'Check for Updates...',
+                click: () => {
+                  if (!app.isPackaged) {
+                    void dialog.showMessageBox({
+                      type: 'info',
+                      title: 'Update Check',
+                      message: 'Cannot check for updates in development mode.',
+                      detail: 'Please package the application first.',
+                    });
+                    return;
+                  }
+                  autoUpdater.checkForUpdates();
+                  void dialog.showMessageBox({
+                    type: 'info',
+                    title: 'Update Check',
+                    message: 'Checking for updates...',
+                    detail: 'If an update is available, you will be notified.',
+                  });
+                },
+              },
+              {type: 'separator' as const},
+              {
+                label: 'Noise Cancellation',
+                type: 'checkbox' as const,
+                checked: noiseCancellationEnabled,
+                click(item: MenuItem) {
+                  noiseCancellationEnabled = item.checked;
+                  mainWindow?.webContents.send(
+                    'nc-toggle',
+                    noiseCancellationEnabled
+                  );
+                  saveSettings();
+                  Menu.setApplicationMenu(buildAppMenu());
+                  tray?.setContextMenu(buildContextMenu());
+                },
+              },
+              {type: 'separator' as const},
+              {role: 'services' as const},
+              {type: 'separator' as const},
+              {role: 'hide' as const},
+              {role: 'hideOthers' as const},
+              {role: 'unhide' as const},
+              {type: 'separator' as const},
+              {role: 'quit' as const},
+            ],
+          },
+        ]
+        : []) as MenuItemConstructorOptions[],
+    ]);
+
+  const buildContextMenu = (): Menu =>
+    Menu.buildFromTemplate([
+      {
+        label: 'Noise Cancellation',
+        type: 'checkbox',
+        checked: noiseCancellationEnabled,
+        click(item) {
+          noiseCancellationEnabled = item.checked;
+          mainWindow?.webContents.send('nc-toggle', noiseCancellationEnabled);
+          saveSettings();
+          tray?.setContextMenu(buildContextMenu());
+          if (process.platform === 'darwin') {
+            Menu.setApplicationMenu(buildAppMenu());
+          }
+        },
+      },
+      {type: 'separator'},
+      {label: 'Show App', click: () => mainWindow?.show()},
+      {
+        label: 'Check for Updates',
+        click: () => {
+          if (!app.isPackaged) {
+            void dialog.showMessageBox({
+              type: 'info',
+              title: 'Update Check',
+              message: 'Cannot check for updates in development mode.',
+              detail: 'Please package the application first.',
+            });
+            return;
+          }
+
+          if (process.platform === 'linux') {
+            void electronUpdater.checkForUpdatesAndNotify();
+          } else {
+            autoUpdater.checkForUpdates();
+          }
+
           void dialog.showMessageBox({
             type: 'info',
             title: 'Update Check',
-            message: 'Cannot check for updates in development mode.',
-            detail: 'Please package the application first.',
+            message: 'Checking for updates...',
+            detail: 'If an update is available, you will be notified.',
           });
-          return;
-        }
-
-        if (process.platform === 'linux') {
-          void electronUpdater.checkForUpdatesAndNotify();
-        } else {
-          autoUpdater.checkForUpdates();
-        }
-
-        void dialog.showMessageBox({
-          type: 'info',
-          title: 'Update Check',
-          message: 'Checking for updates...',
-          detail: 'If an update is available, you will be notified.',
-        });
+        },
       },
-    },
-    {
-      label: 'Exit',
-      click: () => {
-        isQuitting = true;
-        app.quit();
+      {
+        label: 'Exit',
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
       },
-    },
-  ]);
+    ]);
+
   tray.setToolTip('Danny DeClient');
-  tray.setContextMenu(contextMenu);
+  tray.setContextMenu(buildContextMenu());
+  Menu.setApplicationMenu(buildAppMenu());
 
   tray.on('click', () => {
     mainWindow?.show();
