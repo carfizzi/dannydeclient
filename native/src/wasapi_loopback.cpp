@@ -21,7 +21,7 @@ size_t RingBuffer::write(const float* data, size_t frames, int channels) {
     size_t t = tail_.load(std::memory_order_acquire);
 
     size_t free = (t + capacity_ - h - 1) % capacity_;
-    size_t toWrite = std::min(samples, free);
+    size_t toWrite = (std::min)(samples, free);
 
     for (size_t i = 0; i < toWrite; i++) {
         buffer_[(h + i) % capacity_] = data[i];
@@ -36,7 +36,7 @@ size_t RingBuffer::read(float* data, size_t maxSamples) {
     size_t t = tail_.load(std::memory_order_relaxed);
 
     size_t avail = (h + capacity_ - t) % capacity_;
-    size_t toRead = std::min(maxSamples, avail);
+    size_t toRead = (std::min)(maxSamples, avail);
 
     for (size_t i = 0; i < toRead; i++) {
         data[i] = buffer_[(t + i) % capacity_];
@@ -93,7 +93,7 @@ HRESULT STDMETHODCALLTYPE ActivateAudioInterfaceHandler::ActivateCompleted(
 
 HRESULT ActivateAudioInterfaceHandler::Wait(DWORD timeoutMs) {
     DWORD result = WaitForSingleObject(completionEvent_, timeoutMs);
-    if (result != WAIT_OBJECT_0) return E_TIMEOUT;
+    if (result != WAIT_OBJECT_0) return HRESULT_FROM_WIN32(WAIT_TIMEOUT);
     return activateResult_;
 }
 
@@ -122,8 +122,7 @@ bool WasapiLoopbackCapture::start(DWORD excludePid, DWORD sampleRate, DWORD chan
 
     // Set up activation params for process loopback with exclusion
     AUDIOCLIENT_ACTIVATION_PARAMS activationParams = {};
-    activationParams.ActivationType =
-        static_cast<AUDIOCLIENT_ACTIVATION_TYPE>(AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK);
+    activationParams.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
     activationParams.ProcessLoopbackParams.TargetProcessId = excludePid;
     activationParams.ProcessLoopbackParams.ProcessLoopbackMode =
         PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE;

@@ -2,46 +2,23 @@
 
 #ifdef _WIN32
 
+// Prevent Windows min/max macros from conflicting with std::min/std::max
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include <windows.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+#include <audioclientactivationparams.h>
 #include <audiopolicy.h>
 
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
-
-// Forward declare the activation params structures (Windows 10 20348+)
-#ifndef AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK
-#define AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK 1
-
-typedef enum {
-    PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE = 0,
-    PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE = 1
-} PROCESS_LOOPBACK_MODE;
-
-typedef struct {
-    DWORD TargetProcessId;
-    PROCESS_LOOPBACK_MODE ProcessLoopbackMode;
-} AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS;
-
-typedef struct {
-    AUDIOCLIENT_ACTIVATION_TYPE ActivationType;
-    union {
-        AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS ProcessLoopbackParams;
-    };
-} AUDIOCLIENT_ACTIVATION_PARAMS;
-
-#ifndef AUDIOCLIENT_ACTIVATION_TYPE
-typedef enum {
-    AUDIOCLIENT_ACTIVATION_TYPE_DEFAULT = 0,
-    AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK_TYPE = 1
-} AUDIOCLIENT_ACTIVATION_TYPE;
-#endif
-
-#endif // AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK
 
 // Simple lock-free(ish) ring buffer for float32 PCM data
 class RingBuffer {
