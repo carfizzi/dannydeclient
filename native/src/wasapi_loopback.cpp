@@ -6,10 +6,6 @@
 #include <algorithm>
 #include <cstring>
 
-// Virtual audio device ID for process loopback
-static const WCHAR VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK[] =
-    L"VAD\\Process_Loopback";
-
 // --- RingBuffer ---
 
 RingBuffer::RingBuffer(size_t capacity)
